@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>온기 — 1기 사전 신청</title>
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-WZYQSV10QV"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){ dataLayer.push(arguments); }
+  gtag('js', new Date());
+  // 화면 전환(#apply)은 아래 스크립트에서 직접 page_view를 보내요.
+  gtag('config', 'G-WZYQSV10QV', { send_page_view: false });
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -628,7 +637,7 @@
           </div>
         </div>
       </div>
-      <div class="copy" data-i18n="ft_copy">제출한 정보는 온기 1기 운영 목적 외에는 사용되지 않아요.<br>© 2026 3KIM. All rights reserved.</div>
+      <div class="copy" data-i18n="ft_copy">제출한 정보는 온기 1기 운영 목적 외에는 사용되지 않아요.<br>방문 통계를 위해 Google Analytics(쿠키 사용)를 이용해요. 이름·연락처는 통계로 전송되지 않아요.<br>© 2026 3KIM. All rights reserved.</div>
     </div>
   </footer>
 
@@ -793,7 +802,7 @@
     ft_team: "Jiyun Kim (Team lead · PM/Planning)<br>Seongjin Kim (Research · Data)<br>Woojin Kim (UX · Design)",
     ft_h3: "STATUS",
     ft_status: "ONGI is running its Cohort 1 pilot.<small>The app is still in development; Cohort 1 sessions are run by our team in person.</small>",
-    ft_copy: "The information you submit is only used to run ONGI Cohort 1.<br>© 2026 3KIM. All rights reserved.",
+    ft_copy: "The information you submit is only used to run ONGI Cohort 1.<br>We use Google Analytics (cookies) for visit statistics. Your name and contact are never sent to analytics.<br>© 2026 3KIM. All rights reserved.",
     ap_p: "It takes about a minute. This isn't a final booking, just an expression of interest — we'll contact you once the group is formed.",
     fx_h: "About the first session",
     fx_place: "Yeongdeungpo (location may change)", fx_place_s: "If the venue changes, we'll let you know at the contact you leave.",
@@ -827,6 +836,26 @@
                  '1회': '1 session', '2회': '2 sessions', '3회': '3 sessions', '4회': '4 sessions' };
 
   var lang = 'ko';
+  /* ---------- GA4 이벤트 (이름·연락처 같은 개인 입력값은 절대 보내지 않아요) ---------- */
+  function track(name, params) {
+    try {
+      params = params || {};
+      params.site_lang = lang;
+      if (typeof gtag === 'function') gtag('event', name, params);
+    } catch (e) {}
+  }
+  var lastLoc = document.referrer;
+  function pageView(onApply) {
+    try {
+      var base = (location.origin + location.pathname).replace(/index\.html$/, '').replace(/\/?$/, '/');
+      var loc = base + (onApply ? 'apply' : '');
+      gtag('event', 'page_view', {
+        page_title: onApply ? '온기 | 신청 페이지' : '온기 | 앞 페이지',
+        page_location: loc, page_referrer: lastLoc, site_lang: lang
+      });
+      lastLoc = loc;
+    } catch (e) {}
+  }
   var front = document.getElementById('front');
   var apply = document.getElementById('apply');
   var form = document.getElementById('form');
@@ -865,6 +894,7 @@
   function setLang(l, silent) {
     lang = l;
     document.documentElement.lang = l;
+    try { gtag('set', 'user_properties', { site_lang: l }); } catch (e) {}
     document.querySelectorAll('[data-i18n]').forEach(function (el) {
       var k = el.getAttribute('data-i18n');
       el.innerHTML = (l === 'en' && EN[k] !== undefined) ? EN[k] : KO[k];
@@ -890,11 +920,24 @@
     if (!silent) { try { localStorage.setItem('ongi-lang', l); } catch (e) {} }
   }
 
+  var previewTracked = false;
   document.addEventListener('click', function (e) {
+    var cta = e.target.closest('a[href="#apply"]');
+    if (cta) {
+      var where = cta.closest('.sticky-cta') ? 'sticky' : (cta.closest('.site-header') ? 'header' : (cta.closest('.hero') ? 'hero' : (cta.closest('.closing') ? 'closing' : 'other')));
+      track('cta_click', { cta_location: where });
+    }
     var b = e.target.closest('.lang button');
-    if (b) { setLang(b.getAttribute('data-lang')); return; }
+    if (b) {
+      var nl = b.getAttribute('data-lang');
+      var changed = nl !== lang;
+      setLang(nl);
+      if (changed) track('language_change', { to_lang: nl });
+      return;
+    }
     var r = e.target.closest('.rail-btn');
     if (r) {
+      if (!previewTracked) { previewTracked = true; track('app_preview_interact', { method: 'arrow' }); }
       var rail = document.getElementById('rail');
       rail.scrollBy({ left: parseInt(r.getAttribute('data-dir'), 10) * (rail.clientWidth * 0.8), behavior: 'smooth' });
     }
@@ -928,22 +971,26 @@
   });
 
   /* ---------- routing ---------- */
+  var formStarted = false;
   function route() {
     var onApply = location.hash === '#apply';
     front.hidden = onApply;
     apply.hidden = !onApply;
     document.title = onApply ? LABEL[lang].t2 : LABEL[lang].t1;
-    if (onApply) { form.hidden = false; success.hidden = true; document.getElementById('fixed-info').hidden = false; }
+    if (onApply) { form.hidden = false; success.hidden = true; document.getElementById('fixed-info').hidden = false; formStarted = false; }
     window.scrollTo(0, 0);
+    pageView(onApply);
   }
   window.addEventListener('hashchange', route);
 
   /* ---------- form ---------- */
   form.addEventListener('change', function (e) {
+    if (!formStarted) { formStarted = true; track('form_start', { first_field: e.target.name || '' }); }
     if (e.target.name === 'group') updateLevelLabel();
     var f = e.target.closest('.field'); if (f) f.classList.remove('invalid');
   });
   form.addEventListener('input', function (e) {
+    if (!formStarted) { formStarted = true; track('form_start', { first_field: e.target.name || '' }); }
     var f = e.target.closest('.field'); if (f) f.classList.remove('invalid');
   });
   function val(name) {
@@ -955,14 +1002,16 @@
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var required = ['name', 'contact', 'group', 'times'];
-    var firstBad = null;
+    var firstBad = null, badKeys = [];
     required.forEach(function (k) {
       var field = form.querySelector('[data-field="' + k + '"]');
       var ok = !!val(k);
       field.classList.toggle('invalid', !ok);
+      if (!ok) badKeys.push(k);
       if (!ok && !firstBad) firstBad = field;
     });
     if (firstBad) {
+      track('form_error', { missing_fields: badKeys.join(',') });
       var focusable = firstBad.querySelector('input');
       if (focusable) focusable.focus();
       firstBad.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -982,6 +1031,7 @@
     a.href = formUrl; a.target = '_blank'; a.rel = 'noopener';
     document.body.appendChild(a); a.click(); a.remove();
 
+    track('form_submit', { user_group: lastData.group, times: lastData.times, level: lastData.level || 'none' });
     renderSummary();
     form.hidden = true;
     document.getElementById('fixed-info').hidden = true;
@@ -989,6 +1039,26 @@
     window.scrollTo(0, 0);
     document.getElementById('ok-title').focus();
   });
+
+  document.getElementById('open-form').addEventListener('click', function () { track('google_form_manual_open'); });
+
+  /* ---------- 앱 미리보기 스와이프 / 섹션 노출 ---------- */
+  (function () {
+    var rail = document.getElementById('rail');
+    if (rail) rail.addEventListener('scroll', function () {
+      if (!previewTracked && rail.scrollLeft > 24) { previewTracked = true; track('app_preview_interact', { method: 'swipe' }); }
+    }, { passive: true });
+    if (!('IntersectionObserver' in window)) return;
+    var seen = {};
+    var map = [['.preview', 'app_preview'], ['.cream', 'expression_note'], ['.closing', 'closing'], ['.site-footer', 'footer']];
+    var io2 = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        var k = en.target.getAttribute('data-sec');
+        if (en.isIntersecting && !seen[k]) { seen[k] = true; track('section_view', { section: k }); }
+      });
+    }, { threshold: 0.35 });
+    map.forEach(function (m) { var el = document.querySelector(m[0]); if (el) { el.setAttribute('data-sec', m[1]); io2.observe(el); } });
+  })();
 
   /* ---------- sticky CTA: hide while a main CTA is visible ---------- */
   (function () {
