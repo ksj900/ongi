@@ -848,7 +848,7 @@
   function pageView(onApply) {
     try {
       var base = (location.origin + location.pathname).replace(/index\.html$/, '').replace(/\/?$/, '/');
-      var loc = base + (onApply ? 'apply' : '');
+      var loc = base + (onApply ? 'apply' : '') + location.search;
       gtag('event', 'page_view', {
         page_title: onApply ? '온기 | 신청 페이지' : '온기 | 앞 페이지',
         page_location: loc, page_referrer: lastLoc, site_lang: lang
